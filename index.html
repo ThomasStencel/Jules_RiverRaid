@@ -8,7 +8,8 @@
 </head>
 <body>
     <div id="scoreDisplay" style="position: absolute; top: 10px; left: 10px; font-size: 20px; color: white; background-color: rgba(0,0,0,0.5); padding: 5px; z-index: 100;">Score: 0</div>
-    <div id="gameOverDisplay" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 40px; color: red; background-color: rgba(0,0,0,0.7); padding: 20px; display: none; z-index: 100;">Game Over!</div>
+    <div id="livesDisplay" style="position: absolute; top: 40px; left: 10px; font-size: 20px; color: white; background-color: rgba(0,0,0,0.5); padding: 5px; z-index: 100;">Lives: 3</div>
+    <div id="gameOverDisplay" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 40px; color: red; background-color: rgba(0,0,0,0.7); padding: 20px; display: none; z-index: 100; text-align: center;">Game Over!<br><small style="font-size: 20px;">Press R to Restart</small></div>
     <canvas id="gameCanvas"></canvas>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="game.js" defer></script>
