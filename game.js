@@ -1,11 +1,16 @@
 document.addEventListener('DOMContentLoaded', () => {
     // Get the canvas element
     const canvas = document.getElementById('gameCanvas');
+    const scoreDisplay = document.getElementById('scoreDisplay');
+    const gameOverDisplay = document.getElementById('gameOverDisplay');
 
-    if (!canvas) {
-        console.error("Canvas element with ID 'gameCanvas' not found.");
+    if (!canvas || !scoreDisplay || !gameOverDisplay) {
+        console.error("Required DOM elements (canvas, scoreDisplay, or gameOverDisplay) not found.");
         return;
     }
+
+    let score = 0;
+    let isGameOver = false;
 
     // Scene
     const scene = new THREE.Scene();
@@ -93,6 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const shootCooldown = 300; // Milliseconds (0.3 seconds)
 
     function spawnEnemy() {
+        if (isGameOver) return;
         const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial.clone()); // Clone material
         
         // Random horizontal position within player's range
@@ -105,7 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function shootBullet() {
-        if (!canShoot) return;
+        if (!canShoot || isGameOver) return;
 
         const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial.clone()); // Clone material
         bullet.position.x = airplane.position.x;
@@ -137,63 +143,115 @@ document.addEventListener('DOMContentLoaded', () => {
     function animate() {
         requestAnimationFrame(animate);
 
-        // Handle airplane movement
-        if (keysPressed['ArrowLeft']) {
-            airplane.position.x -= playerSpeed;
-        }
-        if (keysPressed['ArrowRight']) {
-            airplane.position.x += playerSpeed;
-        }
-
-        // Clamp airplane position to boundaries
-        if (airplane.position.x < xMin) {
-            airplane.position.x = xMin;
-        }
-        if (airplane.position.x > xMax) {
-            airplane.position.x = xMax;
-        }
-
-        // Scroll river texture
-        if (river && river.material && river.material.map) {
-            river.material.map.offset.y += 0.005;
-        }
-
-        // Enemy spawning
-        framesSinceLastSpawn++;
-        if (framesSinceLastSpawn >= spawnInterval) {
-            spawnEnemy();
-            framesSinceLastSpawn = 0;
-        }
-
-        // Enemy movement and removal
-        for (let i = enemies.length - 1; i >= 0; i--) {
-            const enemy = enemies[i];
-            enemy.position.z += enemySpeed;
-
-            // If enemy is past the camera (and a bit more to be off-screen)
-            if (enemy.position.z > camera.position.z + 1) { 
-                scene.remove(enemy);
-                if (enemy.material) {
-                   enemy.material.dispose();
-                }
-                enemies.splice(i, 1);
+        if (!isGameOver) {
+            // Handle airplane movement
+            if (keysPressed['ArrowLeft']) {
+                airplane.position.x -= playerSpeed;
             }
-        }
-
-        // Bullet movement and removal
-        for (let i = bullets.length - 1; i >= 0; i--) {
-            const bullet = bullets[i];
-            bullet.position.z -= bulletSpeed;
-
-            // If bullet is far off-screen "above" the plane
-            if (bullet.position.z < airplane.position.z - 30) { 
-                scene.remove(bullet);
-                if (bullet.material) {
-                    bullet.material.dispose();
-                }
-                bullets.splice(i, 1);
+            if (keysPressed['ArrowRight']) {
+                airplane.position.x += playerSpeed;
             }
-        }
+
+            // Clamp airplane position to boundaries
+            if (airplane.position.x < xMin) {
+                airplane.position.x = xMin;
+            }
+            if (airplane.position.x > xMax) {
+                airplane.position.x = xMax;
+            }
+
+            // Scroll river texture
+            if (river && river.material && river.material.map) {
+                river.material.map.offset.y += 0.005;
+            }
+
+            // Enemy spawning
+            framesSinceLastSpawn++;
+            if (framesSinceLastSpawn >= spawnInterval) {
+                spawnEnemy(); // spawnEnemy itself checks for isGameOver
+                framesSinceLastSpawn = 0;
+            }
+
+            // Update bounding box for the airplane (once per frame, after movement)
+            const airplaneBox = new THREE.Box3().setFromObject(airplane);
+
+            // Enemy movement, removal, and player-enemy collision
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                enemy.position.z += enemySpeed;
+
+                // Check for removal if past camera
+                if (enemy.position.z > camera.position.z + 1) {
+                    scene.remove(enemy);
+                    if (enemy.material) {
+                        enemy.material.dispose();
+                    }
+                    enemies.splice(i, 1);
+                    continue; 
+                }
+
+                // Player-Enemy Collision
+                const enemyBoxForPlayerCollision = new THREE.Box3().setFromObject(enemy);
+                if (airplaneBox.intersectsBox(enemyBoxForPlayerCollision)) {
+                    console.log("Player collided with an enemy!");
+                    isGameOver = true;
+                    gameOverDisplay.style.display = 'block';
+                    
+                    scene.remove(enemy); // Remove the enemy that caused game over
+                    if (enemy.material) {
+                        enemy.material.dispose();
+                    }
+                    enemies.splice(i, 1);
+                    // No 'continue' here, game over processing will stop further loops for this frame.
+                    break; // Exit enemy loop as game is over
+                }
+            }
+        } // end if(!isGameOver) for game logic updates
+
+        if (!isGameOver) { // Bullet logic only if game is not over
+            // Bullet movement, removal, and bullet-enemy collision
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                bullet.position.z -= bulletSpeed;
+                const bulletBox = new THREE.Box3().setFromObject(bullet);
+
+                // Check for removal if bullet is far off-screen
+                if (bullet.position.z < airplane.position.z - 30) {
+                    scene.remove(bullet);
+                    if (bullet.material) {
+                        bullet.material.dispose();
+                    }
+                    bullets.splice(i, 1);
+                    continue; 
+                }
+
+                // Bullet-Enemy Collision
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    const enemy = enemies[j];
+                    const enemyBoxForBulletCollision = new THREE.Box3().setFromObject(enemy);
+
+                    if (bulletBox.intersectsBox(enemyBoxForBulletCollision)) {
+                        console.log("Bullet hit enemy!");
+                        score += 10;
+                        scoreDisplay.textContent = "Score: " + score;
+
+                        scene.remove(bullet);
+                        if (bullet.material) {
+                            bullet.material.dispose();
+                        }
+                        bullets.splice(i, 1);
+
+                        scene.remove(enemy);
+                        if (enemy.material) {
+                            enemy.material.dispose();
+                        }
+                        enemies.splice(j, 1);
+                        
+                        break; 
+                    }
+                }
+            }
+        } // end if(!isGameOver) for bullet logic
 
         renderer.render(scene, camera);
     }
